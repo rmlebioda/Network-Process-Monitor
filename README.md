@@ -5,9 +5,13 @@ It also does not delete/forget finished processes and has ability to filter aliv
 # Technology
 Program is written in C# .NetFramework 4.7.2 using WinForms.
 
+Administrator rights are required to run Microsoft's EventTracking system, more info:
+
+https://www.nuget.org/packages/Microsoft.Diagnostics.Tracing.TraceEvent/
+
 # Options
 Program lets set two things in App.config appSettings:
-- key "ListRefreshRate" - table refresh rate in miliseconds,
+- key "ListRefreshRate" - table refresh rate in miliseconds (default 1s = 1000ms),
 - key "ErrorLoggerPath" - path to log all catched exception in program, set to empty string to disable logger
 
 # Bugs
