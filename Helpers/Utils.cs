@@ -114,5 +114,10 @@ namespace NetworkProcessMonitor
         {
             return TotalUnits / (TimeInMs / 1000);
         }
+
+        public static Int64 ElapsedTime(DateTime From)
+        {
+            return (Int64)(DateTime.Now - From).TotalMilliseconds;
+        }
     }
 }

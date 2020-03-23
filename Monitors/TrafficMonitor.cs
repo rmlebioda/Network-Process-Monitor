@@ -1,4 +1,5 @@
 ﻿using Microsoft.Diagnostics.Tracing.Parsers;
+using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
 using NetworkProcessMonitor.Helpers;
 using System;
@@ -17,6 +18,7 @@ namespace NetworkProcessMonitor.Monitors
         MainWindowForm MainWindowCallback;
         SortableBindingList<ProcessData> ProcessDataSource;
         CancellationTokenSource CancellationTokenTask;
+        private const int REFERSH_RATE_MS = 1000;
 
         public TrafficMonitor(MainWindowForm form, SortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks)
         {
@@ -41,12 +43,12 @@ namespace NetworkProcessMonitor.Monitors
                 new Task(() => { MonitorInternetTraffic(PIDUsageDictionary); }, CancellationTokenTask.Token).Start();
 
                 Stopwatch stopWatch = Stopwatch.StartNew();
-                long sleepTime = 1000;
+                long sleepTime = REFERSH_RATE_MS;
                 List<Int32> ListOfPidTransfersToBeZeroed = new List<Int32>();
                 while (!CancellationTokenTask.IsCancellationRequested)
                 {
                     Thread.Sleep(Consts.THREAD_CANCELLATION_DELAY_CHECKER_MS);
-                    sleepTime = 1000 - stopWatch.ElapsedMilliseconds;
+                    sleepTime = REFERSH_RATE_MS - stopWatch.ElapsedMilliseconds;
                     if (sleepTime < 0)
                     {
                         UpdateProcessListTransfers(PIDUsageDictionary, stopWatch, ListOfPidTransfersToBeZeroed);
@@ -61,43 +63,64 @@ namespace NetworkProcessMonitor.Monitors
             {
                 m_EtwSession.EnableKernelProvider(KernelTraceEventParser.Keywords.NetworkTCPIP);
 
+                #region TCP/IP actions
                 m_EtwSession.Source.Kernel.TcpIpRecv += data =>
                 {
-                    lock (PIDUsageDictionary)
-                    {
-                        if (PIDUsageDictionary.ContainsKey(data.ProcessID))
-                        {
-                            PIDUsageDictionary[data.ProcessID].Received += data.size;
-                        }
-                        else
-                        {
-                            PIDUsageDictionary[data.ProcessID] = new CustomTransfer
-                            {
-                                Received = data.size,
-                                Sent = 0
-                            };
-                        }
-                    }
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, data.size, 0);
                 };
                 m_EtwSession.Source.Kernel.TcpIpSend += data =>
                 {
-                    lock (PIDUsageDictionary)
-                    {
-                        if (PIDUsageDictionary.ContainsKey(data.ProcessID))
-                        {
-                            PIDUsageDictionary[data.ProcessID].Sent += data.size;
-                        }
-                        else
-                        {
-                            PIDUsageDictionary[data.ProcessID] = new CustomTransfer
-                            {
-                                Received = 0,
-                                Sent = data.size
-                            };
-                        }
-                    }
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, 0, data.size);
                 };
+                m_EtwSession.Source.Kernel.TcpIpRecvIPV6 += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, data.size, 0);
+                };
+                m_EtwSession.Source.Kernel.TcpIpSendIPV6 += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, 0, data.size);
+                };
+                #endregion
+
+                #region UDP actions
+                m_EtwSession.Source.Kernel.UdpIpRecv += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, data.size, 0);
+                };
+                m_EtwSession.Source.Kernel.UdpIpSend += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, 0, data.size);
+                };
+                m_EtwSession.Source.Kernel.UdpIpRecvIPV6 += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, data.size, 0);
+                };
+                m_EtwSession.Source.Kernel.UdpIpSendIPV6 += data =>
+                {
+                    SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, 0, data.size);
+                };
+                #endregion
                 m_EtwSession.Source.Process();
+            }
+        }
+
+        private static void SafeAddNetworkData(Dictionary<int, CustomTransfer> PIDUsageDictionary, Int32 PID, Int32 Rcvd, Int64 Sent)
+        {
+            lock (PIDUsageDictionary)
+            {
+                if (PIDUsageDictionary.ContainsKey(PID))
+                {
+                    PIDUsageDictionary[PID].Received += Rcvd;
+                    PIDUsageDictionary[PID].Sent += Sent;
+                }
+                else
+                {
+                    PIDUsageDictionary[PID] = new CustomTransfer
+                    {
+                        Received = Rcvd,
+                        Sent = Sent
+                    };
+                }
             }
         }
 
@@ -123,7 +146,8 @@ namespace NetworkProcessMonitor.Monitors
                     foreach (KeyValuePair<Int32, CustomTransfer> PIDUsagePair in PIDUsageDictionary)
                     {
                         ProcessData processDataToBeUpdated = ProcessDataSource.FirstOrDefault(
-                            processData => processData.isAlive && processData.PID == PIDUsagePair.Key);
+                            processData => (processData.isAlive || (Utils.ElapsedTime(processData.EndTime) < 5*REFERSH_RATE_MS)) 
+                                && processData.PID == PIDUsagePair.Key);
                         if (!(processDataToBeUpdated is null))
                         {
                             processDataToBeUpdated.AddReceivedSize(PIDUsagePair.Value.Received);
@@ -131,6 +155,19 @@ namespace NetworkProcessMonitor.Monitors
                             processDataToBeUpdated.SetDownloadingTransfer(Utils.CalculateSpeedPerSecond(PIDUsagePair.Value.Received, stopWatch.ElapsedMilliseconds));
                             processDataToBeUpdated.SetUploadingTransfer(Utils.CalculateSpeedPerSecond(PIDUsagePair.Value.Sent, stopWatch.ElapsedMilliseconds));
                             ListOfPidTransfersToBeZeroed.Add(PIDUsagePair.Key);
+                        }
+                        else
+                        {
+                            if (!(MainWindowForm.ErrorLogger is null))
+                            {
+                                MainWindowForm.ErrorLogger.LogObject(
+                                    className: Utils.GetCallerClassFuncName(),
+                                    severity: 1,
+                                    additionalInfo: $"Failed to find active/recently killed (in past {5 * REFERSH_RATE_MS}ms) process with "
+                                        + $"PID: {PIDUsagePair.Key} and usage {PIDUsagePair.Value} bytes",
+                                    errorObjectToLog: PIDUsagePair
+                                );
+                            }
                         }
                     }
                 }
