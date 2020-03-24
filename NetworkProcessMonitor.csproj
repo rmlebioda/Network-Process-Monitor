@@ -151,6 +151,7 @@
   <ItemGroup>
     <Compile Include="Helpers\Consts.cs" />
     <Compile Include="Helpers\CSVLoggerHelper.cs" />
+    <Compile Include="Models\CustomTransfer.cs" />
     <Compile Include="Monitors\TrafficMonitor.cs" />
     <Compile Include="UI\DataGridViewWithProcessDataListSource.cs">
       <SubType>Component</SubType>

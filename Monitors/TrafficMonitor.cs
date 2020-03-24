@@ -1,60 +1,37 @@
 ﻿using Microsoft.Diagnostics.Tracing.Parsers;
-using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Microsoft.Diagnostics.Tracing.Session;
-using NetworkProcessMonitor.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace NetworkProcessMonitor.Monitors
 {
-    public class TrafficMonitor
+    public partial class TrafficMonitor
     {
         MainWindowForm MainWindowCallback;
         SortableBindingList<ProcessData> ProcessDataSource;
         CancellationTokenSource CancellationTokenTask;
-        private const int REFERSH_RATE_MS = 1000;
+        private readonly int DeadPIDLookupTimer;
+        public Dictionary<Int32, CustomTransfer> PIDUsageDictionary = new Dictionary<int, CustomTransfer>();
+        private List<Int32> ListOfPidTransfersToBeZeroed = new List<Int32>();
+        private Stopwatch stopWatch;
 
-        public TrafficMonitor(MainWindowForm form, SortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks)
+
+        public TrafficMonitor(MainWindowForm form, SortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks, int listRefreshRate)
         {
             MainWindowCallback = form;
             ProcessDataSource = processDataSource;
             CancellationTokenTask = _cancelTasks;
-        }
-
-
-        private class CustomTransfer
-        {
-            public Int64 Sent;
-            public Int64 Received;
+            DeadPIDLookupTimer = 2 * listRefreshRate;
         }
 
         public void StartMonitoringInternetTrafficAsync()
         {
-            new Task(() =>
-            {
-                Dictionary<Int32, CustomTransfer> PIDUsageDictionary = new Dictionary<int, CustomTransfer>();
-
-                new Task(() => { MonitorInternetTraffic(PIDUsageDictionary); }, CancellationTokenTask.Token).Start();
-
-                Stopwatch stopWatch = Stopwatch.StartNew();
-                long sleepTime = REFERSH_RATE_MS;
-                List<Int32> ListOfPidTransfersToBeZeroed = new List<Int32>();
-                while (!CancellationTokenTask.IsCancellationRequested)
-                {
-                    Thread.Sleep(Consts.THREAD_CANCELLATION_DELAY_CHECKER_MS);
-                    sleepTime = REFERSH_RATE_MS - stopWatch.ElapsedMilliseconds;
-                    if (sleepTime < 0)
-                    {
-                        UpdateProcessListTransfers(PIDUsageDictionary, stopWatch, ListOfPidTransfersToBeZeroed);
-                    }
-                }
-            }, CancellationTokenTask.Token).Start();
+            new Task(() => { MonitorInternetTraffic(PIDUsageDictionary); }, CancellationTokenTask.Token).Start();
+            stopWatch = Stopwatch.StartNew();
         }
 
         private static void MonitorInternetTraffic(Dictionary<int, CustomTransfer> PIDUsageDictionary)
@@ -81,7 +58,6 @@ namespace NetworkProcessMonitor.Monitors
                     SafeAddNetworkData(PIDUsageDictionary, data.ProcessID, 0, data.size);
                 };
                 #endregion
-
                 #region UDP actions
                 m_EtwSession.Source.Kernel.UdpIpRecv += data =>
                 {
@@ -124,7 +100,7 @@ namespace NetworkProcessMonitor.Monitors
             }
         }
 
-        private void UpdateProcessListTransfers(Dictionary<int, CustomTransfer> PIDUsageDictionary, Stopwatch stopWatch, List<int> ListOfPidTransfersToBeZeroed)
+        public CustomTransfer UpdateProcessListTransfers()
         {
             long totalDownloaded = 0;
             long totalUploaded = 0;
@@ -146,7 +122,7 @@ namespace NetworkProcessMonitor.Monitors
                     foreach (KeyValuePair<Int32, CustomTransfer> PIDUsagePair in PIDUsageDictionary)
                     {
                         ProcessData processDataToBeUpdated = ProcessDataSource.FirstOrDefault(
-                            processData => (processData.isAlive || (Utils.ElapsedTime(processData.EndTime) < 5*REFERSH_RATE_MS)) 
+                            processData => (processData.isAlive || (Utils.ElapsedTime(processData.EndTime) < DeadPIDLookupTimer))
                                 && processData.PID == PIDUsagePair.Key);
                         if (!(processDataToBeUpdated is null))
                         {
@@ -163,7 +139,7 @@ namespace NetworkProcessMonitor.Monitors
                                 MainWindowForm.ErrorLogger.LogObject(
                                     className: Utils.GetCallerClassFuncName(),
                                     severity: 1,
-                                    additionalInfo: $"Failed to find active/recently killed (in past {5 * REFERSH_RATE_MS}ms) process with "
+                                    additionalInfo: $"Failed to find active/recently killed (in past {DeadPIDLookupTimer}ms) process with "
                                         + $"PID: {PIDUsagePair.Key} and usage {PIDUsagePair.Value} bytes",
                                     errorObjectToLog: PIDUsagePair
                                 );
@@ -178,16 +154,8 @@ namespace NetworkProcessMonitor.Monitors
                 }
                 PIDUsageDictionary.Clear();
             }
-            MainWindowCallback.Invoke((MethodInvoker)delegate
-            {
-                MainWindowCallback.GetProcessGridView().SuspendLayout();
-                MainWindowCallback.AddTotalDownloadUpload(totalDownloaded, totalUploaded);
-                MainProcessMonitor.UpdateSortedDataInDataGridView(MainWindowCallback);
-                MainWindowCallback.UpdateVisibilityOfDeadProcessesInDataGridView(false);
-                MainWindowCallback.GetProcessGridView().ResumeLayout();
-                MainWindowCallback.GetProcessGridView().Refresh();
-            });
             stopWatch.Restart();
+            return new CustomTransfer { Received = totalDownloaded, Sent = totalUploaded };
         }
     }
 }

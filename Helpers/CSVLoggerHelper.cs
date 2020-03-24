@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Forms;
@@ -26,7 +27,17 @@ namespace NetworkProcessMonitor
 
         private void CreateCSVFileIfDoesntExist()
         {
-            if (!System.IO.File.Exists(ErrorFilePath))
+            if ((!String.IsNullOrEmpty(ErrorFilePath)) && !Path.IsPathRooted(ErrorFilePath))
+            {
+                System.Windows.MessageBox.Show(
+                            $"Given path doesn't exist, application will not launch, please correct path: {RelativePath}",
+                            "Wrong path",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error
+                        );
+                Utils.EmergencyApplicationExit();
+            }
+            if (!File.Exists(ErrorFilePath))
             {
                 System.IO.Directory.CreateDirectory(RelativePath);
 

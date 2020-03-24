@@ -103,13 +103,14 @@ namespace NetworkProcessMonitor
         {
             fromDataGridView.Columns["isAlive"].Visible = false;
             fromDataGridView.Columns["SessionId"].Visible = false;
+            fromDataGridView.Columns["UniqueID"].Visible = false;
         }
 
         private void ProcessDataGridView_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
             try
             {
-                MainProcessMonitor.MarkDeadProcessesInGrid(this);
+                MainProcessMonitorInstance.MarkDeadProcessesInGrid();
                 MainProcessMonitorInstance.GridChangedUpdateChildrenEvent();
             }
             catch(Exception exception)
@@ -165,9 +166,9 @@ namespace NetworkProcessMonitor
             this.TransferStatusStrip.Refresh();
         }
 
-        public void SetShowingProcesses(int visibleRows)
+        public void UpdateNoOfShowedProcessesInTable()
         {
-            this.ShowingProcesses.Text = visibleRows.ToString();
+            this.ShowingProcesses.Text = ProcessDataGridView.GetVisibleRowsCount().ToString();
         }
     }
 }

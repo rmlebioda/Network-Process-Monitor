@@ -21,6 +21,10 @@ namespace NetworkProcessMonitor
         public const String FINISHED_COLUMN_NAME = "Finished";
         public const String IMAGE_FULL_PATH_COLUMN_NAME = "Image path";
 
+        private static UInt64 UID = 0;
+        private static readonly object UIDLocker = new object();
+
+        public UInt64 UniqueID { get; private set; }
         public bool isAlive { get; private set; }
         [System.ComponentModel.DisplayName(PROCESS_NAME_COLUMN_NAME)]
         public String ProcessName { get; private set; }
@@ -42,9 +46,19 @@ namespace NetworkProcessMonitor
         [System.ComponentModel.DisplayName(IMAGE_FULL_PATH_COLUMN_NAME)]
         public String ImagePath { get; private set; }
 
+
+        private UInt64 GetUniqueID()
+        {
+            lock (UIDLocker)
+            {
+                return UID++;
+            }
+        }
+
         public ProcessData(Process process)
         {
             // process identificators
+            UniqueID = GetUniqueID();
             PID = process.Id;
             ProcessName = process.ProcessName;
             SessionId = process.SessionId;
@@ -76,11 +90,11 @@ namespace NetworkProcessMonitor
             }
         }
 
-        public void MarkDead(DataGridViewWithProcessDataListSource dataGridView, int index, bool hideRow)
+        public void MarkDead(DataGridViewWithProcessDataListSource dataGridView = null, int index = 0, bool hideRow = true)
         {
             EndTime = DateTime.Now;
             isAlive = false;
-            dataGridView.UpdateRowVisibility(index, !hideRow);
+            if (!(dataGridView is null)) dataGridView.UpdateRowVisibility(index, !hideRow);
         }
 
         public void AddReceivedSize(Int64 receivedSize)

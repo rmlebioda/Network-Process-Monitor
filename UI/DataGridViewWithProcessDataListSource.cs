@@ -12,6 +12,13 @@ namespace NetworkProcessMonitor
     public partial class DataGridViewWithProcessDataListSource: System.Windows.Forms.DataGridView
     {
         private MainWindowForm ParentWindow;
+        private UIDCell RememberedCell;
+
+        private class UIDCell
+        {
+            public UInt64 UID { get; set; }
+            public Int32 CellIndex { get; set; }
+        }
 
         public DataGridViewWithProcessDataListSource(): base()
         {
@@ -100,6 +107,33 @@ namespace NetworkProcessMonitor
                     Rows[i].Visible = false;
             }
             currencyManager1.ResumeBinding();
+        }
+
+        public void SaveCurrentlySelectedRowUID()
+        {
+            if (CurrentCell == null || Rows[CurrentCell.RowIndex].Cells["UniqueID"] == null) RememberedCell = null;
+            else
+            {
+                RememberedCell = new UIDCell
+                {
+                    UID = (UInt64)Rows[CurrentCell.RowIndex].Cells["UniqueID"].Value,
+                    CellIndex = CurrentCell.ColumnIndex
+                };
+            }
+        }
+
+        public void RestoreCurrentlySelectedRowByUID()
+        {
+            if (!(RememberedCell is null))
+            {
+                ProcessData target = (DataSource as SortableBindingList<ProcessData>).FirstOrDefault(procesData => procesData.UniqueID == RememberedCell.UID);
+                if (!(target is null)) 
+                {
+                    int rowIndex = (DataSource as SortableBindingList<ProcessData>).IndexOf(target);
+                    CurrentCell = Rows[rowIndex].Cells[(int)RememberedCell.CellIndex];
+                    Rows[rowIndex].Selected = true;
+                }
+            }
         }
     }
 }

@@ -112,12 +112,27 @@ namespace NetworkProcessMonitor
 
         public static Int64 CalculateSpeedPerSecond(Int64 TotalUnits, Int64 TimeInMs)
         {
-            return TotalUnits / (TimeInMs / 1000);
+            if (TimeInMs == 0) return 0;
+            return (Int64)((double)TotalUnits / ((double)TimeInMs / (double)1000));
         }
 
         public static Int64 ElapsedTime(DateTime From)
         {
             return (Int64)(DateTime.Now - From).TotalMilliseconds;
+        }
+
+        public static void EmergencyApplicationExit()
+        {
+            if (System.Windows.Forms.Application.MessageLoop)
+            {
+                // WinForms app
+                System.Windows.Forms.Application.Exit();
+            }
+            else
+            {
+                // Console app
+                System.Environment.Exit(1);
+            }
         }
     }
 }

@@ -24,7 +24,7 @@ namespace NetworkProcessMonitor
         private readonly CancellationTokenSource CancellationTokenTask;
 
         private readonly Int32 ListRefreshRate;
-        private IAsyncResult UIInvokeStatus;
+        private IAsyncResult UIUpdateInvokeStatus;
         private TrafficMonitor TrafficMonitorTask;
 
 
@@ -59,7 +59,7 @@ namespace NetworkProcessMonitor
 
         public void Run()
         {
-            TrafficMonitorTask = new TrafficMonitor(MainWindowFormCallback, ProcessDataSource, CancellationTokenTask);
+            TrafficMonitorTask = new TrafficMonitor(MainWindowFormCallback, ProcessDataSource, CancellationTokenTask, ListRefreshRate);
             TrafficMonitorTask.StartMonitoringInternetTrafficAsync();
 
             while (!CancellationTokenTask.IsCancellationRequested)
@@ -67,8 +67,10 @@ namespace NetworkProcessMonitor
                 Stopwatch startStopwatch = Stopwatch.StartNew();
                 try
                 {
-                    ManageNewProcesses();
-                    UpdateShowingProcessToolStrip();
+                    List<ProcessData> newProcesses = GetNewProcesses();
+                    CustomTransfer TotalTransferSize = TrafficMonitorTask.UpdateProcessListTransfers();
+
+                    InvokeUpdateUI(newProcesses, TotalTransferSize);
                 }
                 catch (Exception e)
                 {
@@ -79,26 +81,41 @@ namespace NetworkProcessMonitor
             }
         }
 
-        private void ManageNewProcesses()
+        private void InvokeUpdateUI(List<ProcessData> newProcesses, CustomTransfer totalTransferSize)
         {
-            Process[] processList = Process.GetProcesses();
-            List<ProcessData> processDataSourceCopy;
-            lock (MainWindowForm.ProcessDataSourceLocker)
+            UIUpdateInvokeStatus = MainWindowFormCallback.BeginInvoke((MethodInvoker)delegate
             {
-                processDataSourceCopy = ProcessDataSource.ToList();
-            }
+                MainWindowFormCallback.GetProcessGridView().SuspendLayout();
+                MainWindowFormCallback.GetProcessGridView().SaveCurrentlySelectedRowUID();
+                AddNewProcesses(newProcesses);
+                MainWindowFormCallback.UpdateVisibilityOfDeadProcessesInDataGridView(false);
+                UpdateSortedDataInDataGridView(shouldMarkDeadProcesses: true);
+                MainWindowFormCallback.GetProcessGridView().RestoreCurrentlySelectedRowByUID();
+                MainWindowFormCallback.GetProcessGridView().ResumeLayout();
+                MainWindowFormCallback.GetProcessGridView().Refresh();
 
-            List<ProcessData> processesToBeAdded = FindNewProcesses(processList, processDataSourceCopy);
-            List<ProcessData> deadProcesses = FindDeadProcessesFromSource(processDataSourceCopy, processList);
-            InvokeManagingNewProcessesOnUIThread(processesToBeAdded, deadProcesses, processDataSourceCopy);
+                UpdateBottomToolStrip(totalTransferSize);
+            });
         }
 
-        private List<ProcessData> FindNewProcesses(Process[] processList, List<ProcessData> processListCopy)
+        private List<ProcessData> GetNewProcesses()
+        {
+            Process[] processList = Process.GetProcesses();
+            lock (MainWindowForm.ProcessDataSourceLocker)
+            {
+                List<ProcessData> processesToBeAdded = FindNewProcesses(processList);
+                MarkDeadProcessesInSource(processList);
+                return processesToBeAdded;
+            }
+            //InvokeManagingNewProcessesOnUIThread(processesToBeAdded, deadProcesses, processDataSourceCopy);
+        }
+
+        private List<ProcessData> FindNewProcesses(Process[] processList)
         {
             List<ProcessData> processesToBeAdded = new List<ProcessData>();
             foreach (Process process in processList)
             {
-                ProcessData resProcess = processListCopy.FirstOrDefault(processData => IsProcessEqualProcessData(process, processData));
+                ProcessData resProcess = ProcessDataSource.FirstOrDefault(processData => IsProcessEqualProcessData(process, processData));
                 if (resProcess == null)
                 {
                     processesToBeAdded.Add(new ProcessData(process));
@@ -107,43 +124,15 @@ namespace NetworkProcessMonitor
             return processesToBeAdded;
         }
 
-        private List<ProcessData> FindDeadProcessesFromSource(List<ProcessData> processDataSourceCopy, Process[] processList)
+        private void MarkDeadProcessesInSource(Process[] processList)
         {
             List<ProcessData> deadProcesses = new List<ProcessData>();
-            foreach (ProcessData processData in processDataSourceCopy.Where(processData => processData.isAlive))
+            foreach (ProcessData processData in ProcessDataSource.Where(processData => processData.isAlive))
             {
                 Process process = processList.FirstOrDefault(_process => IsProcessEqualProcessData(_process, processData));
                 if(process == null)
                 {
-                    deadProcesses.Add(processData);
-                }
-            }
-            return deadProcesses;
-        }
-
-        private void InvokeManagingNewProcessesOnUIThread(List<ProcessData> processesToBeAdded, List<ProcessData> deadProcesses, List<ProcessData> processDataSourceCopy)
-        {
-            UIInvokeStatus = MainWindowFormCallback.BeginInvoke((MethodInvoker)delegate
-            {
-                MarkDeadProcesses(deadProcesses, processDataSourceCopy);
-                AddNewProcesses(processesToBeAdded);
-                if(processesToBeAdded.Count > 0 || deadProcesses.Count > 0) UpdateSortedDataInDataGridView(MainWindowFormCallback);
-            });
-        }
-
-        private void MarkDeadProcesses( List<ProcessData> deadProcesses, List<ProcessData> processDataSourceCopy)
-        {
-            foreach (ProcessData processData in deadProcesses)
-            {
-                int index = processDataSourceCopy.FindIndex(_process => _process == processData);
-                foreach (DataGridViewCell cell in MainWindowFormCallback.GetProcessGridView().Rows[index].Cells)
-                {
-                    cell.Style.BackColor = Consts.DEAD_PROCESS_BACKGROUND_COLOR;
-                    cell.Style.SelectionBackColor = Consts.DEAD_PROCESS_SELECTED_COLOR;
-                }
-                lock (MainWindowForm.ProcessDataSourceLocker)
-                {
-                    ProcessDataSource[index].MarkDead(MainWindowFormCallback.GetProcessGridView(), index, MainWindowFormCallback.ShouldHideRow(processDataSourceCopy[index]));
+                    processData.MarkDead();
                 }
             }
         }
@@ -163,7 +152,7 @@ namespace NetworkProcessMonitor
         {
             Int64 sleepTime = ListRefreshRate - stopwatch.ElapsedMilliseconds;
             Debug.WriteLine($"Executed one loop in {stopwatch.ElapsedMilliseconds}, refresh timer: {ListRefreshRate}, refreshing in {sleepTime} ms");
-            while ((sleepTime > 0 || !UIInvokeStatus.IsCompleted) && !CancellationTokenTask.IsCancellationRequested)
+            while ((sleepTime > 0 || !UIUpdateInvokeStatus.IsCompleted) && !CancellationTokenTask.IsCancellationRequested)
             {
                 Thread.Sleep(Consts.THREAD_CANCELLATION_DELAY_CHECKER_MS);
                 sleepTime = ListRefreshRate - stopwatch.ElapsedMilliseconds;
@@ -172,32 +161,34 @@ namespace NetworkProcessMonitor
 
         public void GridChangedUpdateChildrenEvent()
         {
-            UpdateShowingProcessToolStrip();
+            MainWindowFormCallback.UpdateNoOfShowedProcessesInTable();
         }
 
-        private void UpdateShowingProcessToolStrip()
+        private void UpdateBottomToolStrip(CustomTransfer totalTransferSize)
         {
-            MainWindowFormCallback.SetShowingProcesses(MainWindowFormCallback.GetProcessGridView().GetVisibleRowsCount());
+            MainWindowFormCallback.UpdateNoOfShowedProcessesInTable();
+            MainWindowFormCallback.AddTotalDownloadUpload(totalTransferSize.Received, totalTransferSize.Sent);
         }
 
 
-        public static void UpdateSortedDataInDataGridView(MainWindowForm form, bool shouldMarkDeadProcesses = true)
+        public void UpdateSortedDataInDataGridView(bool shouldMarkDeadProcesses = true)
         {
-            if (form.GetProcessGridView().SortedColumn != null)
+            if (MainWindowFormCallback.GetProcessGridView().SortedColumn != null)
             {
-                form.GetProcessGridView().Sort(
-                        form.GetProcessGridView().SortedColumn,
-                        SortableBindingList<ProcessData>.GetCompatibleListSortOrderFrom(form.GetProcessGridView().SortOrder)
+                MainWindowFormCallback.GetProcessGridView().Sort(
+                        MainWindowFormCallback.GetProcessGridView().SortedColumn,
+                        SortableBindingList<ProcessData>.GetCompatibleListSortOrderFrom(MainWindowFormCallback.GetProcessGridView().SortOrder)
                     );
-                if (shouldMarkDeadProcesses) MarkDeadProcessesInGrid(form);
+                if (shouldMarkDeadProcesses) MarkDeadProcessesInGrid();
             }
         }
 
-        public static void MarkDeadProcessesInGrid(MainWindowForm form)
+        public void MarkDeadProcessesInGrid()
         {
-            foreach (DataGridViewRow row in form.GetProcessGridView().Rows)
+            foreach (DataGridViewRow row in MainWindowFormCallback.GetProcessGridView().Rows)
             {
-                if (((bool)row.Cells["isAlive"].Value) == false)
+                if ( (!(row.Cells["isAlive"].Value is null)) &&
+                    ((bool)row.Cells["isAlive"].Value) == false)
                 {
                     foreach (DataGridViewCell cell in row.Cells)
                     {
