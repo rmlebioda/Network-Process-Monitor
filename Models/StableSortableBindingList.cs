@@ -1,24 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Windows.Forms;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.Models
 {
-    public class SortableBindingList<T> : BindingList<T>
+    public partial class StableSortableBindingList<T> : BindingList<T>
     {
         private readonly Dictionary<Type, PropertyComparer<T>> comparers;
         private bool isSorted;
         private ListSortDirection listSortDirection;
         private PropertyDescriptor propertyDescriptor;
 
-        public SortableBindingList()
+        public StableSortableBindingList()
             : base(new List<T>())
         {
             this.comparers = new Dictionary<Type, PropertyComparer<T>>();
         }
 
-        public SortableBindingList(IEnumerable<T> enumeration)
+        public StableSortableBindingList(IEnumerable<T> enumeration)
             : base(new List<T>(enumeration))
         {
             this.comparers = new Dictionary<Type, PropertyComparer<T>>();
@@ -51,8 +53,6 @@ namespace NetworkProcessMonitor
 
         protected override void ApplySortCore(PropertyDescriptor property, ListSortDirection direction)
         {
-            List<T> itemsList = (List<T>)this.Items;
-
             Type propertyType = property.PropertyType;
             PropertyComparer<T> comparer;
             if (!this.comparers.TryGetValue(propertyType, out comparer))
@@ -62,7 +62,7 @@ namespace NetworkProcessMonitor
             }
 
             comparer.SetPropertyAndDirection(property, direction);
-            itemsList.Sort(comparer);
+            this.InternalStableSort(comparer);
 
             this.propertyDescriptor = property;
             this.listSortDirection = direction;
@@ -93,17 +93,6 @@ namespace NetworkProcessMonitor
             }
 
             return -1;
-        }
-
-        public static ListSortDirection GetCompatibleListSortOrderFrom(SortOrder sortOrder)
-        {
-            switch (sortOrder)
-            {
-                case SortOrder.Ascending:
-                    return ListSortDirection.Ascending;
-                default:
-                    return ListSortDirection.Descending;
-            }
         }
     }
 }

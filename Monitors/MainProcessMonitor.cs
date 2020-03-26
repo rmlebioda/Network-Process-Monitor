@@ -13,14 +13,16 @@ using System.Windows.Forms;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Session;
 using NetworkProcessMonitor.Helpers;
+using NetworkProcessMonitor.Models;
 using NetworkProcessMonitor.Monitors;
+using NetworkProcessMonitor.UI;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.Monitors
 {
     public class MainProcessMonitor
     {
         private readonly MainWindowForm MainWindowFormCallback;
-        private readonly SortableBindingList<ProcessData> ProcessDataSource;
+        private readonly StableSortableBindingList<ProcessData> ProcessDataSource;
         private readonly CancellationTokenSource CancellationTokenTask;
 
         private readonly Int32 ListRefreshRate;
@@ -28,7 +30,7 @@ namespace NetworkProcessMonitor
         private TrafficMonitor TrafficMonitorTask;
 
 
-        public MainProcessMonitor(MainWindowForm form, SortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks)
+        public MainProcessMonitor(MainWindowForm form, StableSortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks)
         {
             MainWindowFormCallback = form;
             ProcessDataSource = processDataSource;
@@ -85,14 +87,16 @@ namespace NetworkProcessMonitor
         {
             UIUpdateInvokeStatus = MainWindowFormCallback.BeginInvoke((MethodInvoker)delegate
             {
-                MainWindowFormCallback.GetProcessGridView().SuspendLayout();
-                MainWindowFormCallback.GetProcessGridView().SaveCurrentlySelectedRowUID();
+                DataGridViewWithProcessDataListSource dataGridView = MainWindowFormCallback.GetProcessGridView();
+
+                dataGridView.SaveAndSuspendCurrentView();
+
                 AddNewProcesses(newProcesses);
                 MainWindowFormCallback.UpdateVisibilityOfDeadProcessesInDataGridView(false);
                 UpdateSortedDataInDataGridView(shouldMarkDeadProcesses: true);
-                MainWindowFormCallback.GetProcessGridView().RestoreCurrentlySelectedRowByUID();
-                MainWindowFormCallback.GetProcessGridView().ResumeLayout();
-                MainWindowFormCallback.GetProcessGridView().Refresh();
+
+                dataGridView.RestoreAndResumeCurrentView();
+                dataGridView.Refresh();
 
                 UpdateBottomToolStrip(totalTransferSize);
             });
@@ -177,10 +181,10 @@ namespace NetworkProcessMonitor
             {
                 MainWindowFormCallback.GetProcessGridView().Sort(
                         MainWindowFormCallback.GetProcessGridView().SortedColumn,
-                        SortableBindingList<ProcessData>.GetCompatibleListSortOrderFrom(MainWindowFormCallback.GetProcessGridView().SortOrder)
+                        StableSortableBindingList<ProcessData>.GetCompatibleListSortOrderFrom(MainWindowFormCallback.GetProcessGridView().SortOrder)
                     );
-                if (shouldMarkDeadProcesses) MarkDeadProcessesInGrid();
             }
+            if (shouldMarkDeadProcesses) MarkDeadProcessesInGrid();
         }
 
         public void MarkDeadProcessesInGrid()

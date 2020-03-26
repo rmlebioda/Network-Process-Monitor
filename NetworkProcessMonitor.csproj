@@ -152,6 +152,7 @@
     <Compile Include="Helpers\Consts.cs" />
     <Compile Include="Helpers\CSVLoggerHelper.cs" />
     <Compile Include="Models\CustomTransfer.cs" />
+    <Compile Include="Models\StableSortableBindingListExtensions.cs" />
     <Compile Include="Monitors\TrafficMonitor.cs" />
     <Compile Include="UI\DataGridViewWithProcessDataListSource.cs">
       <SubType>Component</SubType>
@@ -167,7 +168,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Models\PropertyComparer.cs" />
-    <Compile Include="Models\SortableBindingList.cs" />
+    <Compile Include="Models\StableSortableBindingList.cs" />
     <Compile Include="Helpers\Utils.cs" />
     <EmbeddedResource Include="UI\MainWindowForm.resx">
       <DependentUpon>MainWindowForm.cs</DependentUpon>

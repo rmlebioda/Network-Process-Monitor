@@ -1,4 +1,6 @@
 ﻿using NetworkProcessMonitor.Helpers;
+using NetworkProcessMonitor.Models;
+using NetworkProcessMonitor.Monitors;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -13,11 +15,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.UI
 {
     public partial class MainWindowForm : Form
     {
-        private static SortableBindingList<ProcessData> ProcessDataSource = new SortableBindingList<ProcessData>();
+        private static StableSortableBindingList<ProcessData> ProcessDataSource = new StableSortableBindingList<ProcessData>();
         private static CancellationTokenSource _cancelTasks;
         private static Task task;
         private Int64 TotalDownloadedLong = 0;
@@ -94,7 +96,7 @@ namespace NetworkProcessMonitor
             return this.ProcessDataGridView;
         }
 
-        public static SortableBindingList<ProcessData> GetProcessDataSource()
+        public static StableSortableBindingList<ProcessData> GetProcessDataSource()
         {
             return ProcessDataSource;
         }

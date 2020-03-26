@@ -1,4 +1,4 @@
-﻿namespace NetworkProcessMonitor
+﻿namespace NetworkProcessMonitor.UI
 {
     partial class MainWindowForm
     {
@@ -40,7 +40,7 @@
             this.flowLayoutPanel1 = new System.Windows.Forms.FlowLayoutPanel();
             this.HideDeadProcesses = new System.Windows.Forms.CheckBox();
             this.HideActiveProcessesCheck = new System.Windows.Forms.CheckBox();
-            this.ProcessDataGridView = new NetworkProcessMonitor.DataGridViewWithProcessDataListSource();
+            this.ProcessDataGridView = new NetworkProcessMonitor.UI.DataGridViewWithProcessDataListSource();
             this.panel1.SuspendLayout();
             this.TransferStatusStrip.SuspendLayout();
             this.flowLayoutPanel1.SuspendLayout();

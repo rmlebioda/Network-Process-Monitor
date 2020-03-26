@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NetworkProcessMonitor.Monitors
+namespace NetworkProcessMonitor.Models
 {
     public class CustomTransfer
     {

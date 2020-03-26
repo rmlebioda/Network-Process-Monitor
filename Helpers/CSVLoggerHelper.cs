@@ -7,7 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Forms;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.Helpers
 {
     public class CSVLoggerHelper
     {

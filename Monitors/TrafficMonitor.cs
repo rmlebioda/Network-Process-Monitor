@@ -1,5 +1,8 @@
 ﻿using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Session;
+using NetworkProcessMonitor.Helpers;
+using NetworkProcessMonitor.Models;
+using NetworkProcessMonitor.UI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -9,10 +12,10 @@ using System.Threading.Tasks;
 
 namespace NetworkProcessMonitor.Monitors
 {
-    public partial class TrafficMonitor
+    public class TrafficMonitor
     {
         MainWindowForm MainWindowCallback;
-        SortableBindingList<ProcessData> ProcessDataSource;
+        StableSortableBindingList<ProcessData> ProcessDataSource;
         CancellationTokenSource CancellationTokenTask;
         private readonly int DeadPIDLookupTimer;
         public Dictionary<Int32, CustomTransfer> PIDUsageDictionary = new Dictionary<int, CustomTransfer>();
@@ -20,7 +23,7 @@ namespace NetworkProcessMonitor.Monitors
         private Stopwatch stopWatch;
 
 
-        public TrafficMonitor(MainWindowForm form, SortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks, int listRefreshRate)
+        public TrafficMonitor(MainWindowForm form, StableSortableBindingList<ProcessData> processDataSource, CancellationTokenSource _cancelTasks, int listRefreshRate)
         {
             MainWindowCallback = form;
             ProcessDataSource = processDataSource;

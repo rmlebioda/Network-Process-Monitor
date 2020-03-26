@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.Helpers
 {
     public class Utils
     {

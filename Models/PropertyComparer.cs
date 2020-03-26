@@ -7,7 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.Models
 {
     public class PropertyComparer<T> : IComparer<T>
     {

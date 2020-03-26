@@ -1,4 +1,6 @@
-﻿using System;
+﻿using NetworkProcessMonitor.Helpers;
+using NetworkProcessMonitor.Models;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -7,17 +9,22 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace NetworkProcessMonitor
+namespace NetworkProcessMonitor.UI
 {
     public partial class DataGridViewWithProcessDataListSource: System.Windows.Forms.DataGridView
     {
         private MainWindowForm ParentWindow;
-        private UIDCell RememberedCell;
+        private ViewState RememberedViewState;
 
-        private class UIDCell
+        private class ViewState
         {
-            public UInt64 UID { get; set; }
-            public Int32 CellIndex { get; set; }
+            internal class SelectedRow
+            {
+                public UInt64 UID { get; set; }
+                public Int32 CellIndex { get; set; }
+            }
+            public SelectedRow Selected { get; set; }
+            public Int32 VisibleTopRowIndex { get; set; }
         }
 
         public DataGridViewWithProcessDataListSource(): base()
@@ -34,7 +41,7 @@ namespace NetworkProcessMonitor
             // e.RowCount - amount of added rows (always one?)
             // e.RowIndex - index of added row
             base.OnRowsAdded(e);
-            if (ParentWindow.ShouldHideRow((DataSource as SortableBindingList<ProcessData>)[e.RowIndex]))
+            if (ParentWindow.ShouldHideRow((DataSource as StableSortableBindingList<ProcessData>)[e.RowIndex]))
             {
                 UpdateRowVisibility(e.RowIndex, false);
             }
@@ -103,37 +110,64 @@ namespace NetworkProcessMonitor
             currencyManager1.SuspendBinding();
             for (int i = 0; i < Rows.Count; i++)
             {
-                if (ParentWindow.ShouldHideRow((DataSource as SortableBindingList<ProcessData>)[i]))
+                if (ParentWindow.ShouldHideRow((DataSource as StableSortableBindingList<ProcessData>)[i]))
                     Rows[i].Visible = false;
             }
             currencyManager1.ResumeBinding();
         }
 
-        public void SaveCurrentlySelectedRowUID()
+        public void SaveAndSuspendCurrentView()
         {
-            if (CurrentCell == null || Rows[CurrentCell.RowIndex].Cells["UniqueID"] == null) RememberedCell = null;
-            else
+            SuspendLayout();
+            //Enabled = false;
+            RememberedViewState = new ViewState();
+            if (CurrentCell != null && Rows[CurrentCell.RowIndex].Cells["UniqueID"] != null)
             {
-                RememberedCell = new UIDCell
+                RememberedViewState.Selected = new ViewState.SelectedRow()
                 {
                     UID = (UInt64)Rows[CurrentCell.RowIndex].Cells["UniqueID"].Value,
                     CellIndex = CurrentCell.ColumnIndex
                 };
             }
+            RememberedViewState.VisibleTopRowIndex = FirstDisplayedScrollingRowIndex;
         }
 
-        public void RestoreCurrentlySelectedRowByUID()
+        public void RestoreAndResumeCurrentView()
         {
-            if (!(RememberedCell is null))
+            if (!(RememberedViewState is null))
             {
-                ProcessData target = (DataSource as SortableBindingList<ProcessData>).FirstOrDefault(procesData => procesData.UniqueID == RememberedCell.UID);
-                if (!(target is null)) 
+                RestoreSelectedCell();
+                RestoreFirstVisibleRow();
+
+                RememberedViewState = null;
+            }
+            //Enabled = true;
+            ResumeLayout();
+        }
+
+        private void RestoreSelectedCell()
+        {
+            if (!(RememberedViewState.Selected is null))
+            {
+                ProcessData target = (DataSource as StableSortableBindingList<ProcessData>)
+                                                                .FirstOrDefault(procesData => procesData.UniqueID == RememberedViewState.Selected.UID);
+                if (!(target is null))
                 {
-                    int rowIndex = (DataSource as SortableBindingList<ProcessData>).IndexOf(target);
-                    CurrentCell = Rows[rowIndex].Cells[(int)RememberedCell.CellIndex];
+                    int rowIndex = (DataSource as StableSortableBindingList<ProcessData>).IndexOf(target);
+                    CurrentCell = Rows[rowIndex].Cells[(int)RememberedViewState.Selected.CellIndex];
                     Rows[rowIndex].Selected = true;
                 }
             }
+        }
+
+        private void RestoreFirstVisibleRow()
+        {
+            try
+            {
+                if (Rows[RememberedViewState.VisibleTopRowIndex].Visible == true && Rows[RememberedViewState.VisibleTopRowIndex].Frozen == false)
+                    FirstDisplayedScrollingRowIndex = RememberedViewState.VisibleTopRowIndex;
+            }
+            catch (Exception) { }
         }
     }
 }
