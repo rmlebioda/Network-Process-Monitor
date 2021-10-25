@@ -1,3 +1,6 @@
+# Readonly disclaimer
+This project will not be maintained by me anymore.
+
 # Network Process Monitor
 Program tracks all running processes in system and reports their network usage in a table along with execution path.
 It also does not delete/forget finished processes and has ability to filter alive/dead processes out from the table.
